@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>League Warmer</title>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; cursor: url('cursor.png'), auto; }
+    #gameCanvas { display: block; }
+    .screen { 
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      background: url('menu-background.png') no-repeat center center fixed;
+      background-size: cover;
+      color: white;
+    }
+    .hidden { display: none !important; }
+    button { padding: 10px 20px; font-size: 1.2em; margin-top: 10px; cursor: url('cursor_select.png'), auto; }
+    .slider{ margin-top: 0px; margin-bottom: 15px; }
+    .checkbox { margin-top: 5px; cursor: url('cursor_select.png'), auto;}
+    #timer { position: absolute; top: 10px; right: 10px; font-size: 1.5em; color: #fff; }
+    #skill-container-q { position: absolute; bottom: 20px; left: 46%; width: 60px; height: 60px; transform: translateX(-50%); }
+    #skill-container-e { position: absolute; bottom: 20px; left: 53%; width: 60px; height: 60px; transform: translateX(-50%); }
+    #skill-container-d { position: absolute; bottom: 20px; left: 61%; width: 50px; height: 50px; transform: translateX(-50%); }
+    #skill-container-f { position: absolute; bottom: 20px; left: 64%; width: 50px; height: 50px; transform: translateX(-50%); }
+    #skill-container-qss { position: absolute; bottom: 20px; left: 67%; width: 50px; height: 50px; transform: translateX(-50%); }
+    .skill-img { width: 100%; height: 100%; }
+    .skill-cooldown { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: 1em; color: white; background: rgba(0,0,0,0.5); }
+    .bfp { width: 240px; margin-bottom: -50px; }
+    .top-left-buttons, .top-right-buttons {
+      position: absolute;
+      z-index: 1000;
+      gap: 15px;
+    }
+    .icon-button { width: 40px; height: 40px; background: none; border: none; background-size: cover; background-position: center; cursor: url('cursor_select.png'), auto; }
+    .top-right-buttons {
+      top: 10px;
+      right: 20px;
+      display: none;
+    }
+    .top-left-buttons {
+      top: 10px;
+      left: 20px;
+      display: none;
+    }
+    .ingame-gui{
+      background:rgba(32, 32, 32)
+    }
+    body.menu-active .top-left-buttons,
+    body.menu-active .top-right-buttons {
+      display: flex;
+    }
+    #setQssKeyBtn, #qssKeyDisplay { display: none; margin-left: 10px; }
+    .menu-box {
+      background-color: rgba(50, 50, 50, 0);
+      padding: 20px;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-size: 155% auto;
+      background-position: center top;
+      background-repeat: no-repeat;
+      min-height: 650px;
+      min-width: 400px;
+    }
+    .popup { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+    .popup-content { background-color: rgba(50, 50, 50, 100); padding-bottom:30px; padding-top: 0px; border-radius: 10px; width: 60%; max-width: 400px; position: relative; color: white; }
+    .close-btn { position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; background: url('close.png') no-repeat center center; background-size: contain; border: none; cursor: url('cursor_select.png'), auto; }
+    /* Shake animation for menu screen */
+    @keyframes shake {
+      0% { transform: translate(0px, 0px); }
+      10% { transform: translate(-10px, 2px); }
+      20% { transform: translate(8px, -2px); }
+      30% { transform: translate(-8px, 4px); }
+      40% { transform: translate(8px, -4px); }
+      50% { transform: translate(-6px, 2px); }
+      60% { transform: translate(6px, -2px); }
+      70% { transform: translate(-4px, 2px); }
+      80% { transform: translate(4px, -2px); }
+      90% { transform: translate(-2px, 1px); }
+      100% { transform: translate(0px, 0px); }
+    }
+    .shake {
+      animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+    }
+  </style>
+</head>
+<body>
+  <div id="version" style="position: absolute; bottom: 10px; left: 10px; color: white; font-size: 1.3em;">v1.0.0</div>
+  <div class="top-left-buttons">
+    <button class="icon-button" id="openMenu1" style="background-image: url('settings.png');"></button>
+    <button class="icon-button" id="openMenu2" style="background-image: url('help.png');"></button>
+  </div>
+  <div class="top-right-buttons">
+    <button class="icon-button" id="fullscreenBtn" style="background-image: url('fullscreen.png');"></button>
+  </div>
+  <div id="menu-screen" class="screen">
+    <div class="menu-box">
+      <div><img src="bfp.png" class="bfp"></div>
+      <h1 id="menu-title">League Warmer</h1>
+      <center><p id="game-stats" class="hidden">You survived: 0.00s<br>APM: 0</p></center>
+      <button id="playBtn">Play</button><br>
+      <label class="hidden"><input type="checkbox" id="shakeCheckbox" checked> Screen Shake</label>
+      <label class="hidden"><input type="checkbox" id="swapUrf"> URF mode</label>
+      <label class="hidden"><input type="checkbox" id="qssModeCheckbox" checked> QSS mode</label>
+      <label class="hidden"><input type="checkbox" id="swarmModeCheckbox"> Swarm mode</label>
+      <span id="qssKeyDisplay">QSS Key: Not set</span>
+      <button id="setQssKeyBtn">Set QSS Key</button>
+      <br><p>v1.0.0</p>
+    </div>
+  </div>
+  <div id="settings-popup" class="popup hidden">
+    <div class="popup-content">
+      <button class="close-btn" id="closeSettings"></button>
+      <center><h2>Settings</h2>
+      <p>Volume: </p>
+      <input id="volumeSlider" class="slider" type="range" min="0" max="1" step="0.01" value="1"><br>
+      <label class="checkbox"><input type="checkbox" id="swapSkillsCheckbox"> Swap D and F Skills</label>
+    </center></div>
+  </div>
+  <div id="help-popup" class="popup hidden">
+    <div class="popup-content">
+      <button class="close-btn" id="closeHelp"></button>
+      <center><h2>Help</h2>
+      <p>W tej grze napierdalasz bez opamiętania i unikasz pocisków jakbyś tańczył z samą śmiercią.
+        Każda sekunda to jazda bez trzymanki — setki przeciwników, tysiące kul lecących w Twoją stronę, a Ty w środku tego piekła, jak jebany Neo z Matriksa, tylko z większym arsenałem.
+        Nie ma czasu na myślenie. Dasz, unik, headshot, eksplozja. Kolejny dasz, salwa rakiet, boss większy niż budynek, a Ty dalej stoisz i siejesz rozpierdol.
+        To nie gra, to test nerwów, refleksu i czystej furii.
+        Jak nie jesteś gotów – spierdalaj. Tu grają tylko ci, co się nie boją patrzeć śmierci w oczy… i ją wysadzać.</p>
+      </center></div>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+  <div id="timer" style="display:none; background-color: rgba(32,32,32,1); padding: 8px; border-radius: 10px; top:0; right:0;">0.00s</div>
+  <div>  
+    <div id="skill-container-q" style="display:none;">
+      <img class="skill-img" id="skill-img-q" src="q.webp" alt="Q Skill">
+      <div class="skill-cooldown hidden" id="skill-cooldown-q">1.0</div>
+    </div>
+    <div id="skill-container-e" style="display:none;">
+      <img class="skill-img" id="skill-img-e" src="e.webp" alt="E Skill">
+      <div class="skill-cooldown hidden" id="skill-cooldown-e">8.0</div>
+    </div>
+    <div id="skill-container-d" style="display:none;">
+      <img class="skill-img" id="skill-img-d" src="Ghost.webp" alt="D Skill">
+      <div class="skill-cooldown hidden" id="skill-cooldown-d">20.0</div>
+    </div>
+    <div id="skill-container-f" style="display:none;">
+      <img class="skill-img" id="skill-img-f" src="Flash.webp" alt="F Skill">
+      <div class="skill-cooldown hidden" id="skill-cooldown-f">23.0</div>
+    </div>
+    <div id="skill-container-qss" style="display:none;">
+      <img class="skill-img" id="skill-img-qss" src="qss.webp" alt="QSS Skill">
+      <div class="skill-cooldown hidden" id="skill-cooldown-qss">10.0</div>
+    </div>
+  </div>
+  <script>
+    (() => {
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      let width, height;
+      window.addEventListener('resize', () => { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; });
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+
+      const SPEED_MULT = 0.5;
+      const CAST_DELAY = 100;
+      const DASH_DURATION = 50;
+      const SPEED_BOOST_DURATION = 4000;
+      const BLINK_GLOW_DURATION = 50;
+      let swarmMode = false;
+
+      const swapUrf = document.getElementById('swapUrf');
+      let Q_COOLDOWN = 1000;
+      let E_COOLDOWN = 8000;
+      let D_COOLDOWN = 20000;
+      let F_COOLDOWN = 23000;
+      let QSS_COOLDOWN = 10000;
+
+      function updateCooldowns() {
+        if (swapUrf.checked) {
+          Q_COOLDOWN = 200;
+          E_COOLDOWN = 1000;
+          D_COOLDOWN = 5000;
+          F_COOLDOWN = 6000;
+          QSS_COOLDOWN = 3000;
+        } else {
+          Q_COOLDOWN = 1000;
+          E_COOLDOWN = 8000;
+          D_COOLDOWN = 20000;
+          F_COOLDOWN = 23000;
+          QSS_COOLDOWN = 10000;
+        }
+      }
+      swapUrf.addEventListener('change', updateCooldowns);
+      updateCooldowns();
+
+      const clickAudio = new Audio('click.ogg');
+      const castAudio = new Audio('cast.ogg');
+      const destroyAudio = new Audio('destroy.wav');
+      const speedBoostAudio = new Audio('Ghost.ogg');
+      const blinkAudio = new Audio('Flash.ogg');
+      const qssAudio = new Audio('qss.ogg');
+      const dashAudio = new Audio('dash.mp3');
+
+      const optionImages = [];
+      for (let i = 1; i <= 4; i++) {
+        const img = new Image();
+        img.src = `option${i}.webp`;
+        optionImages.push(img);
+      }
+
+      const optionSounds = [];
+      for (let i = 1; i <= 4; i++) {
+        const sound = new Audio(`sound${i}.ogg`);
+        optionSounds.push(sound);
+      }
+
+      const wheelRadius = 100 ;
+      const optionSize = 100;
+      const largeOptionSize = 150;
+
+      let isWheelActive = false;
+      let initialCursorX = 0;
+      let initialCursorY = 0;
+      let largeImages = [];
+
+      const bgImage = new Image(); bgImage.src = 'background.png';
+      const ironBorderImg = new Image();
+      ironBorderImg.src = 'iron_border.webp';
+
+      const menuScreen = document.getElementById('menu-screen');
+      const playBtn = document.getElementById('playBtn');
+      const volumeSlider = document.getElementById('volumeSlider');
+      const shakeCheckbox = document.getElementById('shakeCheckbox');
+      const swapSkillsCheckbox = document.getElementById('swapSkillsCheckbox');
+      const qssModeCheckbox = document.getElementById('qssModeCheckbox');
+      const setQssKeyBtn = document.getElementById('setQssKeyBtn');
+      const qssKeyDisplay = document.getElementById('qssKeyDisplay');
+      const menuTitle = document.getElementById('menu-title');
+      const gameStats = document.getElementById('game-stats');
+      const timerDiv = document.getElementById('timer');
+      const qDiv = document.getElementById('skill-container-q');
+      const eDiv = document.getElementById('skill-container-e');
+      const dDiv = document.getElementById('skill-container-d');
+      const fDiv = document.getElementById('skill-container-f');
+      const qssDiv = document.getElementById('skill-container-qss');
+      const skillImgQ = document.getElementById('skill-img-q');
+      const skillCdDivQ = document.getElementById('skill-cooldown-q');
+      const skillImgE = document.getElementById('skill-img-e');
+      const skillCdDivE = document.getElementById('skill-cooldown-e');
+      const skillImgD = document.getElementById('skill-img-d');
+      const skillCdDivD = document.getElementById('skill-cooldown-d');
+      const skillImgF = document.getElementById('skill-img-f');
+      const skillCdDivF = document.getElementById('skill-cooldown-f');
+      const skillImgQss = document.getElementById('skill-img-qss');
+      const skillCdDivQss = document.getElementById('skill-cooldown-qss');
+      const settingsPopup = document.getElementById('settings-popup');
+      const helpPopup = document.getElementById('help-popup');
+      const closeSettings = document.getElementById('closeSettings');
+      const closeHelp = document.getElementById('closeHelp');
+      const openMenu1 = document.getElementById('openMenu1');
+      const openMenu2 = document.getElementById('openMenu2');
+      const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+      window.addEventListener('load', () => {
+        settingsPopup.classList.add('hidden');
+        helpPopup.classList.add('hidden');
+        // QSS mode enabled by default
+        qssModeCheckbox.checked = true;
+        qssModeEnabled = true;
+        setQssKeyBtn.style.display = 'inline';
+        qssKeyDisplay.style.display = 'inline';
+        qssKeyDisplay.textContent = `QSS Key: ${qssKey.toUpperCase()}`;
+        // Always reset banner to default on first load
+        try {
+          localStorage.removeItem('leagueWarmerLastRank');
+        } catch (e) {}
+      });
+
+      let volume = +volumeSlider.value;
+      let shake = shakeCheckbox.checked;
+      let skillsSwapped = swapSkillsCheckbox.checked;
+      let qssModeEnabled = qssModeCheckbox.checked;
+      let qssKey = 'w'; // Default QSS key is W
+      let settingQssKey = false;
+      let nextQAvailable = 0;
+      let nextEAvailable = 0;
+      let nextDAvailable = 0;
+      let nextFAvailable = 0;
+      let nextQssAvailable = 0;
+      let lastCast = 0;
+      let isDashing = false;
+      let dashStart = { x: 0, y: 0 };
+      let dashTarget = { x: 0, y: 0 };
+      let dashStartTime = 0;
+      let isSpeedBoostActive = false;
+      let speedBoostEndTime = 0;
+      let isGlowingYellow = false;
+      let glowYellowEndTime = 0;
+      let isGlowingBlue = false;
+      let glowBlueEndTime = 0;
+      let blinkCopies = [];
+      let specialRockets = [];
+      let nextSpecialRocketSpawn = 0;
+      let actionCount = 0;
+
+      volumeSlider.oninput = e => volume = +e.target.value;
+      shakeCheckbox.onchange = e => shake = e.target.checked;
+      swapSkillsCheckbox.onchange = e => skillsSwapped = e.target.checked;
+      qssModeCheckbox.onchange = e => {
+        qssModeEnabled = e.target.checked;
+        setQssKeyBtn.style.display = qssModeEnabled ? 'inline' : 'none';
+        qssKeyDisplay.style.display = qssModeEnabled ? 'inline' : 'none';
+        qssKeyDisplay.textContent = `QSS Key: ${qssKey.toUpperCase()}`;
+      };
+      setQssKeyBtn.onclick = () => {
+        settingQssKey = true;
+        setQssKeyBtn.textContent = 'Press a key...';
+        window.addEventListener('keydown', handleQssKeySet);
+      };
+      function handleQssKeySet(e) {
+        if (!settingQssKey) return;
+        const key = e.key.toLowerCase();
+        if (['q', 'e', 'd', 'f'].includes(key)) {
+          alert('Cannot set QSS key to Q, E, D, or F.');
+        } else {
+          qssKey = key;
+          qssKeyDisplay.textContent = `QSS Key: ${qssKey.toUpperCase()}`;
+          settingQssKey = false;
+          setQssKeyBtn.textContent = 'Set QSS Key';
+          window.removeEventListener('keydown', handleQssKeySet);
+        }
+      }
+      playBtn.onclick = startGame;
+
+      openMenu1.onclick = (e) => {
+        e.stopPropagation();
+        settingsPopup.classList.remove('hidden');
+        helpPopup.classList.add('hidden');
+      };
+      openMenu2.onclick = (e) => {
+        e.stopPropagation();
+        helpPopup.classList.remove('hidden');
+        settingsPopup.classList.add('hidden');
+      };
+      closeSettings.onclick = (e) => {
+        e.stopPropagation();
+        settingsPopup.classList.add('hidden');
+      };
+      closeHelp.onclick = (e) => {
+        e.stopPropagation();
+        helpPopup.classList.add('hidden');
+      };
+      settingsPopup.onclick = (e) => {
+        if (e.target === settingsPopup) {
+          settingsPopup.classList.add('hidden');
+        }
+      };
+      helpPopup.onclick = (e) => {
+        if (e.target === helpPopup) {
+          helpPopup.classList.add('hidden');
+        }
+      };
+
+      fullscreenBtn.onclick = () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(err => {
+            console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+          });
+        } else {
+          document.exitFullscreen();
+        }
+      };
+
+      let player, rockets, enemies, bullets, markers, booms, ghosts;
+      let startT, lastRocket, lastEnemy, shakeT, lastGhost;
+      let mouseX = 0, mouseY = 0;
+
+      canvas.onmousemove = e => {
+        const r = canvas.getBoundingClientRect();
+        mouseX = e.clientX - r.left;
+        mouseY = e.clientY - r.top;
+      };
+
+      function startGame() {
+        document.body.classList.remove('menu-active');
+        menuTitle.textContent = 'League Warmer';
+        gameStats.classList.add('hidden');
+        playBtn.textContent = 'Play';
+        menuScreen.classList.add('hidden');
+        timerDiv.style.display = 'block';
+        qDiv.style.display = 'block';
+        eDiv.style.display = 'block';
+        dDiv.style.display = 'block';
+        fDiv.style.display = 'block';
+        qssDiv.style.display = qssModeEnabled ? 'block' : 'none';
+
+        document.querySelector('.top-left-buttons').style.display = 'none';
+        document.querySelector('.top-right-buttons').style.display = 'none';
+
+        swarmMode = document.getElementById('swarmModeCheckbox').checked;
+        nextQAvailable = 0;
+        nextEAvailable = 0;
+        nextDAvailable = 0;
+        nextFAvailable = 0;
+        nextQssAvailable = 0;
+        isDashing = false;
+        isSpeedBoostActive = false;
+        isGlowingYellow = false;
+        isGlowingBlue = false;
+        isWheelActive = false;
+        largeImages = [];
+        blinkCopies = [];
+        specialRockets = [];
+        nextSpecialRocketSpawn = Date.now() + 10000;
+        actionCount = 0;
+
+        skillsSwapped = swapSkillsCheckbox.checked;
+        skillImgD.src = skillsSwapped ? 'Flash.webp' : 'Ghost.webp';
+        skillImgF.src = skillsSwapped ? 'Ghost.webp' : 'Flash.webp';
+
+        player = { x: 0, y: 0, destSx: 0, destSy: 0, moving: false, isRooted: false, rootedEndTime: 0 };
+        rockets = [];
+        enemies = [];
+        bullets = [];
+        markers = [];
+        booms = [];
+        ghosts = [];
+        startT = Date.now();
+        lastRocket = startT;
+        lastEnemy = startT;
+        shakeT = 0;
+        lastGhost = 0;
+
+        window.onkeydown = onKey;
+        window.onkeyup = onKeyUp;
+        canvas.oncontextmenu = onClick;
+        requestAnimationFrame(loop);
+      }
+
+      function endGame() {
+        // Play dead.wav sound
+        const deadAudio = new Audio('dead.wav');
+        deadAudio.volume = volume * 0.7;
+        deadAudio.play();
+        // Shake main menu screen for 0.5s
+        triggerMenuShake();
+        document.body.classList.add('menu-active');
+        window.onkeydown = null;
+        window.onkeyup = null;
+        canvas.oncontextmenu = null;
+        // Save highest rank to localStorage for banner
+        const elapsed = (Date.now() - startT) / 1000;
+        const rankIdx = getRankIndexByTime(elapsed);
+        const rankName = rankStages[rankIdx].name;
+        try {
+          localStorage.setItem('leagueWarmerLastRank', rankName);
+        } catch (e) {}
+        const surv = elapsed.toFixed(2);
+        const apm = Math.round(actionCount / (elapsed / 60));
+        menuTitle.textContent = 'Game Over';
+        gameStats.innerHTML = `You survived: ${surv}s<br>APM: ${apm}`;
+        gameStats.classList.remove('hidden');
+        playBtn.textContent = 'Play Again';
+        // Set menu banner
+        setMenuBanner();
+        menuScreen.classList.remove('hidden');
+        timerDiv.style.display = 'none';
+        qDiv.style.display = 'none';
+        eDiv.style.display = 'none';
+        dDiv.style.display = 'none';
+        fDiv.style.display = 'none';
+        qssDiv.style.display = 'none';
+
+        document.querySelector('.top-left-buttons').style.display = 'flex';
+        document.querySelector('.top-right-buttons').style.display = 'flex';
+      }
+
+      // Add shake animation to menu screen
+      function triggerMenuShake() {
+        const menu = document.getElementById('menu-screen');
+        menu.classList.add('shake');
+        setTimeout(() => menu.classList.remove('shake'), 500);
+      }
+
+      const rankStages = [
+        { time: 0, img: 'iron_border.webp', name: 'Bronze' },
+        { time: 30, img: 'bronze_border.webp', name: 'Bronze' },
+        { time: 60, img: 'silver_border.webp', name: 'Silver' },
+        { time: 90, img: 'gold_border.webp', name: 'Gold' },
+        { time: 120, img: 'platinum_border.webp', name: 'Platinum' },
+        { time: 150, img: 'emerald_border.webp', name: 'Emerald' },
+        { time: 180, img: 'diamond_border.webp', name: 'Diamond' },
+        { time: 210, img: 'master_border.webp', name: 'Master' },
+        { time: 240, img: 'grandmaster_border.webp', name: 'Grandmaster' },
+        { time: 300, img: 'challenger_border.webp', name: 'Challenger' }
+      ];
+      let currentRankIndex = 0;
+      let borderImg = new Image();
+      borderImg.src = rankStages[0].img;
+      const newRankAudio = new Audio('new_rank.wav');
+
+      function getRankIndexByTime(seconds) {
+        for (let i = rankStages.length - 1; i >= 0; i--) {
+          if (seconds >= rankStages[i].time) return i;
+        }
+        return 0;
+      }
+
+      function onKey(e) {
+        if (e.key === 'g' || e.key === 'Alt') {
+          if (!isWheelActive) {
+            isWheelActive = true;
+            initialCursorX = mouseX;
+            initialCursorY = mouseY;
+            player.moving = false;
+          }
+        } else if (!isWheelActive) {
+          if (e.key === 's') player.moving = false;
+          if (e.key.toLowerCase() === 'q') { actionCount++; tryCastQ(); }
+          if (e.key.toLowerCase() === 'e') { actionCount++; tryCastE(); }
+          if (e.key.toLowerCase() === 'd') { actionCount++; tryCastD(); }
+          if (e.key.toLowerCase() === 'f') { actionCount++; tryCastF(); }
+          if (qssModeEnabled && e.key.toLowerCase() === qssKey) { actionCount++; tryCastQss(); }
+        }
+      }
+
+      function onKeyUp(e) {
+        if (e.key === 'g' || e.key === 'Alt') {
+          if (isWheelActive) {
+            isWheelActive = false;
+            const selectedOption = getSelectedOption();
+            if (selectedOption !== null) {
+              displayLargeImage(selectedOption);
+              playOptionSound(selectedOption);
+            }
+          }
+        }
+      }
+
+      function onClick(e) {
+        if (isWheelActive) return;
+        e.preventDefault();
+        actionCount++;
+        const now = Date.now();
+        if (now - lastCast < CAST_DELAY || isDashing) return;
+        clickAudio.volume = volume;
+        clickAudio.play();
+        const r = canvas.getBoundingClientRect();
+        player.destSx = e.clientX - r.left;
+        player.destSy = e.clientY - r.top;
+        player.moving = true;
+      }
+
+      function tryCastQ() {
+        const now = Date.now();
+        if (now < nextQAvailable) return;
+        player.moving = false;
+        lastCast = now;
+        nextQAvailable = now + Q_COOLDOWN;
+        castAudio.volume = volume;
+        castAudio.play();
+        shoot();
+      }
+
+      function tryCastE() {
+        const now = Date.now();
+        if (now < nextEAvailable || isDashing) return;
+        player.moving = false;
+        const playerScreen = worldToScreen(player.x, player.y);
+        const dxs = mouseX - playerScreen.sx;
+        const dys = mouseY - playerScreen.sy;
+        const dist = Math.hypot(dxs, dys);
+        if (dist > 0) {
+          const dashScreenDistance = 150;
+          const targetSx = playerScreen.sx + (dxs / dist) * dashScreenDistance;
+          const targetSy = playerScreen.sy + (dys / dist) * dashScreenDistance;
+          const targetWorld = screenToWorld(targetSx, targetSy);
+          dashStart = { x: player.x, y: player.y };
+          dashTarget = { x: targetWorld.wx, y: targetWorld.wy };
+          dashStartTime = now;
+          isDashing = true;
+          nextEAvailable = now + E_COOLDOWN;
+          dashAudio.volume = volume * 0.7;
+          dashAudio.currentTime = 0;
+          dashAudio.play();
+        }
+      }
+
+      function tryCastD() {
+        const now = Date.now();
+        if (now < nextDAvailable) return;
+        if (skillsSwapped) {
+          performBlink(now);
+          nextDAvailable = now + F_COOLDOWN;
+        } else {
+          activateSpeedBoost(now);
+          nextDAvailable = now + D_COOLDOWN;
+        }
+      }
+
+      function tryCastF() {
+        const now = Date.now();
+        if (now < nextFAvailable) return;
+        if (skillsSwapped) {
+          activateSpeedBoost(now);
+          nextFAvailable = now + D_COOLDOWN;
+        } else {
+          performBlink(now);
+          nextFAvailable = now + F_COOLDOWN;
+        }
+      }
+
+      function tryCastQss() {
+        const now = Date.now();
+        if (now < nextQssAvailable) return;
+        player.moving = false;
+        lastCast = now;
+        nextQssAvailable = now + QSS_COOLDOWN;
+        qssAudio.volume = volume * 0.11;
+        qssAudio.play();
+        isGlowingBlue = true;
+        glowBlueEndTime = now + 50;
+        if (player.isRooted) {
+          player.isRooted = false;
+          nextQssAvailable = now;
+        }
+      }
+
+      function activateSpeedBoost(now) {
+        isSpeedBoostActive = true;
+        speedBoostEndTime = now + SPEED_BOOST_DURATION;
+        speedBoostAudio.volume = volume * 0.06;
+        speedBoostAudio.play();
+      }
+
+      function performBlink(now) {
+        const playerScreen = worldToScreen(player.x, player.y);
+        const dxs = mouseX - playerScreen.sx;
+        const dys = mouseY - playerScreen.sy;
+        const dist = Math.hypot(dxs, dys);
+        if (dist > 0) {
+          const blinkScreenDistance = 150 * 1.2;
+          const targetSx = playerScreen.sx + (dxs / dist) * blinkScreenDistance;
+          const targetSy = playerScreen.sy + (dys / dist) * blinkScreenDistance;
+          const targetWorld = screenToWorld(targetSx, targetSy);
+          const startPos = { x: player.x, y: player.y };
+          player.x = targetWorld.wx;
+          player.y = targetWorld.wy;
+          blinkCopies.push({ x: startPos.x, y: startPos.y, t: now });
+          isGlowingYellow = true;
+          glowYellowEndTime = now + BLINK_GLOW_DURATION;
+          blinkAudio.volume = volume * 0.07;
+          blinkAudio.play();
+        }
+      }
+
+      function shoot() {
+        const size = Math.min(width, height) * 0.05;
+        const speed = size * 0.2 * SPEED_MULT;
+        const ps = worldToScreen(player.x, player.y);
+        const dx = mouseX - ps.sx, dy = mouseY - ps.sy;
+        const d = Math.hypot(dx, dy);
+        if (d > 0) {
+          const stepX = dx / d * speed, stepY = dy / d * speed;
+          const wdx = (stepX + 2 * stepY) / 2;
+          const wdy = (2 * stepY - stepX) / 2;
+          bullets.push({ x: player.x, y: player.y, vx: wdx, vy: wdy, traveled: 0, max: size * 15 });
+          if (bullets.length > 100) {
+            bullets.shift();
+          }
+        }
+      }
+
+      function spawnRocket() {
+        const ang = Math.random() * 2 * Math.PI;
+        const dist = Math.max(width, height);
+        const wx = player.x + Math.cos(ang) * dist;
+        const wy = player.y + Math.sin(ang) * dist;
+        const dx = player.x - wx, dy = player.y - wy;
+        const d = Math.hypot(dx, dy);
+        const size = Math.min(width, height) * 0.05;
+        const speed = size * 0.1 * SPEED_MULT * 0.75;
+        rockets.push({ x: wx, y: wy, vx: dx / d * speed, vy: dy / d * speed });
+      }
+
+      function spawnEnemy() {
+        const ang = Math.random() * 2 * Math.PI;
+        const dist = Math.max(width, height);
+        enemies.push({ x: player.x + Math.cos(ang) * dist, y: player.y + Math.sin(ang) * dist });
+      }
+
+      function spawnSpecialRocket() {
+        const ang = Math.random() * 2 * Math.PI;
+        const dist = Math.max(width, height);
+        specialRockets.push({ x: player.x + Math.cos(ang) * dist, y: player.y + Math.sin(ang) * dist });
+      }
+
+      function getSelectedOption() {
+        for (let i = 0; i < 4; i++) {
+          const angle = i * Math.PI / 2;
+          const centerX = initialCursorX + wheelRadius * Math.cos(angle);
+          const centerY = initialCursorY + wheelRadius * Math.sin(angle);
+          const left = centerX - optionSize / 2;
+          const top = centerY - optionSize / 2;
+          if (mouseX >= left && mouseX <= left + optionSize && mouseY >= top && mouseY <= top + optionSize) {
+            return i;
+          }
+        }
+        return null;
+      }
+
+      function displayLargeImage(optionIndex) {
+        largeImages.push({
+          index: optionIndex,
+          x: initialCursorX,
+          y: initialCursorY,
+          t: Date.now()
+        });
+      }
+
+      function playOptionSound(optionIndex) {
+        optionSounds[optionIndex].volume = volume*0.07;
+        optionSounds[optionIndex].play();
+      }
+
+      function loop() {
+        const now = Date.now(), el = now - startT;
+        // Difficulty scaling: rockets and special rockets cap at 5min, enemies at 4min
+        // progress5 = Math.min(1, el / 300000) for 5min cap
+        // progress4 = Math.min(1, el / 240000) for 4min cap
+        const progress5 = Math.min(1, el / 300000);
+        const progress4 = Math.min(1, el / 240000);
+        // Rocket spawn interval: from 1000ms (easy) to 280ms (hard, at 5min)
+        const rInt = 280 + (1000 - 280) * (1 - progress5);
+        if (!swarmMode && now - lastRocket > rInt) { 
+          spawnRocket(); 
+          lastRocket = now; 
+        }
+        // Enemy spawn interval: from 2000ms (easy) to 900ms (hard, at 4min)
+        if (el > 5000) {
+          const eInt = 900 + (2000 - 900) * (1 - progress4);
+          if (now - lastEnemy > eInt) { 
+            const numEnemies = swarmMode ? 3 : 1;
+            for (let i = 0; i < numEnemies; i++) {
+              spawnEnemy();
+            }
+            lastEnemy = now; 
+          }
+        }
+        // Special rocket spawn: random between maxInt and minInt, both interpolate from (15s,8s) to (6s,2s) over 5min
+        if (qssModeEnabled && now > nextSpecialRocketSpawn) {
+          const minSpecial = 2000 + (8000 - 2000) * (1 - progress5); // from 8s to 2s
+          const maxSpecial = 6000 + (15000 - 6000) * (1 - progress5); // from 15s to 6s
+          const specialInt = minSpecial + Math.random() * (maxSpecial - minSpecial);
+          spawnSpecialRocket();
+          nextSpecialRocketSpawn = now + specialInt;
+        }
+
+        const size = Math.min(width, height) * 0.05;
+        const basePSpeed = size * 0.1 * SPEED_MULT;
+        const pSpeed = isSpeedBoostActive ? basePSpeed * 1.2 : basePSpeed;
+        const eSpeed = basePSpeed * 0.75;
+
+        if ((player.moving || isDashing) && now - lastGhost > 10) {
+          ghosts.push({ x: player.x, y: player.y, t: now });
+          lastGhost = now;
+        }
+        ghosts = ghosts.filter(g => now - g.t < 50);
+        blinkCopies = blinkCopies.filter(c => now - c.t < BLINK_GLOW_DURATION);
+
+        if (isSpeedBoostActive && now > speedBoostEndTime) isSpeedBoostActive = false;
+        if (isGlowingYellow && now > glowYellowEndTime) isGlowingYellow = false;
+        if (isGlowingBlue && now > glowBlueEndTime) isGlowingBlue = false;
+        if (player.isRooted && now > player.rootedEndTime) player.isRooted = false;
+
+        if (isDashing) {
+          const elapsed = now - dashStartTime;
+          if (elapsed < DASH_DURATION) {
+            const progress = elapsed / DASH_DURATION;
+            player.x = dashStart.x + (dashTarget.x - dashStart.x) * progress;
+            player.y = dashStart.y + (dashTarget.y - dashStart.y) * progress;
+          } else {
+            player.x = dashTarget.x;
+            player.y = dashTarget.y;
+            isDashing = false;
+          }
+        } else if (player.moving && !player.isRooted) {
+          const ps = worldToScreen(player.x, player.y);
+          const dxs = player.destSx - ps.sx, dys = player.destSy - ps.sy;
+          const dist = Math.hypot(dxs, dys);
+          if (dist <= pSpeed) {
+            const w = screenToWorld(player.destSx, player.destSy);
+            player.x = w.wx; player.y = w.wy; player.moving = false;
+          } else {
+            const stepX = dxs / dist * pSpeed;
+            const stepY = dys / dist * pSpeed;
+            const wdx = (stepX + 2 * stepY) / 2;
+            const wdy = (2 * stepY - stepX) / 2;
+            player.x += wdx; player.y += wdy;
+          }
+        }
+        rockets.forEach(r => { r.x += r.vx; r.y += r.vy; });
+        enemies.forEach(e => {
+          const dx = player.x - e.x, dy = player.y - e.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 0) { e.x += dx / d * eSpeed; e.y += dy / d * eSpeed; }
+        });
+        specialRockets.forEach(sr => {
+          const dx = player.x - sr.x, dy = player.y - sr.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 0) {
+            const speed = eSpeed * 1.3;
+            sr.x += dx / d * speed;
+            sr.y += dy / d * speed;
+          }
+        });
+        bullets = bullets.filter(b => {
+          b.x += b.vx; b.y += b.vy; b.traveled += Math.hypot(b.vx, b.vy); return b.traveled < b.max;
+        });
+        markers.forEach(m => m.alpha -= 0.02); markers = markers.filter(m => m.alpha > 0);
+        booms.forEach(b => { b.radius += 1; b.alpha -= 0.02; }); booms = booms.filter(b => b.alpha > 0);
+
+        ctx.save();
+        if (bgImage.complete) {
+          ctx.drawImage(bgImage, 0, 0, width, height);
+        } else {
+          ctx.fillStyle = '#e0e0e0';
+          ctx.fillRect(0, 0, width, height);
+        }
+        ghosts.forEach(g => {
+          const alpha = 1 - (now - g.t) / 50; const gS = worldToScreen(g.x, g.y);
+          ctx.globalAlpha = alpha * 0.3; ctx.fillStyle = 'red'; ctx.fillRect(gS.sx - size / 2, gS.sy - size / 2, size, size);
+        });
+        blinkCopies.forEach(c => {
+          const age = now - c.t;
+          if (age < BLINK_GLOW_DURATION) {
+            const alpha = 1 - age / BLINK_GLOW_DURATION;
+            const cS = worldToScreen(c.x, c.y);
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = 'yellow';
+            ctx.fillRect(cS.sx - size / 2, cS.sy - size / 2, size, size);
+          }
+        });
+        ctx.globalAlpha = 1;
+        const pS = worldToScreen(player.x, player.y);
+        // Draw rank border under the player, 3.5x bigger and centered
+        if (borderImg.complete) {
+          const borderSize = size * 3;
+          ctx.drawImage(borderImg, pS.sx - borderSize / 2, pS.sy - borderSize / 2 - 15, borderSize, borderSize);
+        }
+        ctx.fillStyle = 'red'; ctx.fillRect(pS.sx - size / 2, pS.sy - size / 2, size, size);
+        ctx.fillStyle = 'black'; rockets.forEach(r => { const rS = worldToScreen(r.x, r.y); ctx.beginPath(); ctx.arc(rS.sx, rS.sy, size * 0.25, 0, 2 * Math.PI); ctx.fill(); });
+        ctx.fillStyle = 'green'; enemies.forEach(e => { const eS = worldToScreen(e.x, e.y); ctx.fillRect(eS.sx - size / 2, eS.sy - size / 2, size, size); });
+        specialRockets.forEach(sr => {
+          const srS = worldToScreen(sr.x, sr.y);
+          ctx.beginPath(); ctx.arc(srS.sx, srS.sy, size * 0.6, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255,255,0,0.3)'; ctx.fill();
+          ctx.beginPath(); ctx.arc(srS.sx, srS.sy, size * 0.5, 0, 2 * Math.PI); ctx.fillStyle = 'lightblue'; ctx.fill();
+        });
+        ctx.fillStyle = 'orange'; bullets.forEach(b => { const bS = worldToScreen(b.x, b.y); ctx.beginPath(); ctx.arc(bS.sx, bS.sy, size * 0.15, 0, 2 * Math.PI); ctx.fill(); });
+        if (player.moving) {
+          ctx.fillStyle = 'rgba(0, 0, 255, 0.5)';
+          ctx.beginPath();
+          ctx.arc(player.destSx, player.destSy, 10, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+        if (player.isRooted) {
+          ctx.fillStyle = 'white';
+          ctx.strokeStyle = 'black';
+          ctx.lineWidth = 2;
+          ctx.font = '20px Arial';
+          ctx.textAlign = 'center';
+          ctx.strokeText('Rooted', pS.sx, pS.sy - size / 2 - 10);
+          ctx.fillText('Rooted', pS.sx, pS.sy - size / 2 - 10);
+        }
+
+        if (isWheelActive) {
+          for (let i = 0; i < 4; i++) {
+            const angle = i * Math.PI / 2;
+            const centerX = initialCursorX + wheelRadius * Math.cos(angle);
+            const centerY = initialCursorY + wheelRadius * Math.sin(angle);
+            const left = centerX - optionSize / 2;
+            const top = centerY - optionSize / 2;
+            ctx.drawImage(optionImages[i], left, top, optionSize, optionSize);
+          }
+        }
+
+        const displayDuration = 1000;
+        largeImages = largeImages.filter(img => now - img.t < displayDuration);
+        largeImages.forEach(img => {
+          const image = optionImages[img.index];
+          const size = largeOptionSize;
+          ctx.drawImage(image, img.x - size / 2, img.y - size / 2, size, size);
+        });
+
+        for (const r of rockets) {
+          const rS = worldToScreen(r.x, r.y);
+          if (Math.hypot(rS.sx - pS.sx, rS.sy - pS.sy) < size * 0.75) return endGame();
+        }
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          const e = enemies[i], eS = worldToScreen(e.x, e.y);
+          if (Math.hypot(eS.sx - pS.sx, eS.sy - pS.sy) < size * 0.75) return endGame();
+          for (let j = bullets.length - 1; j >= 0; j--) {
+            const b = bullets[j], bS = worldToScreen(b.x, b.y);
+            if (Math.hypot(bS.sx - eS.sx, bS.sy - eS.sy) < size * 0.75) {
+              destroyAudio.volume = volume * 0.4; destroyAudio.play();
+              booms.push({ x: eS.sx, y: eS.sy, radius: 0, alpha: 1 });
+              if (shake) shakeT = 300;
+              nextQAvailable = Date.now();
+              enemies.splice(i, 1);
+              bullets.splice(j, 1);
+              break;
+            }
+          }
+        }
+        for (let i = specialRockets.length - 1; i >= 0; i--) {
+          const sr = specialRockets[i], srS = worldToScreen(sr.x, sr.y);
+          if (Math.hypot(srS.sx - pS.sx, srS.sy - pS.sy) < size) {
+            player.isRooted = true;
+            player.rootedEndTime = now + 2000;
+            specialRockets.splice(i, 1);
+          }
+        }
+        booms.forEach(b => {
+          ctx.globalAlpha = b.alpha; ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, 2 * Math.PI); ctx.strokeStyle = 'yellow'; ctx.lineWidth = 2; ctx.stroke();
+        }); ctx.globalAlpha = 1;
+        ctx.restore();
+
+        const elapsed = (now - startT) / 1000;
+        timerDiv.textContent = elapsed.toFixed(2) + 's';
+
+        if (now < nextQAvailable) {
+          const rem = ((nextQAvailable - now) / 1000).toFixed(1);
+          skillImgQ.style.filter = 'grayscale(100%)';
+          skillCdDivQ.textContent = rem;
+          skillCdDivQ.classList.remove('hidden');
+        } else {
+          skillImgQ.style.filter = '';
+          skillCdDivQ.classList.add('hidden');
+        }
+        if (now < nextEAvailable) {
+          const rem = ((nextEAvailable - now) / 1000).toFixed(1);
+          skillImgE.style.filter = 'grayscale(100%)';
+          skillCdDivE.textContent = rem;
+          skillCdDivE.classList.remove('hidden');
+        } else {
+          skillImgE.style.filter = '';
+          skillCdDivE.classList.add('hidden');
+        }
+        if (now < nextDAvailable) {
+          const rem = ((nextDAvailable - now) / 1000).toFixed(1);
+          skillImgD.style.filter = 'grayscale(100%)';
+          skillCdDivD.textContent = rem;
+          skillCdDivD.classList.remove('hidden');
+        } else {
+          skillImgD.style.filter = '';
+          skillCdDivD.classList.add('hidden');
+        }
+        if (now < nextFAvailable) {
+          const rem = ((nextFAvailable - now) / 1000).toFixed(1);
+          skillImgF.style.filter = 'grayscale(100%)';
+          skillCdDivF.textContent = rem;
+          skillCdDivF.classList.remove('hidden');
+        } else {
+          skillImgF.style.filter = '';
+          skillCdDivF.classList.add('hidden');
+        }
+        if (qssModeEnabled && now < nextQssAvailable) {
+          const rem = ((nextQssAvailable - now) / 1000).toFixed(1);
+          skillImgQss.style.filter = 'grayscale(100%)';
+          skillCdDivQss.textContent = rem;
+          skillCdDivQss.classList.remove('hidden');
+        } else if (qssModeEnabled) {
+          skillImgQss.style.filter = '';
+          skillCdDivQss.classList.add('hidden');
+        }
+
+        // Rank border progression
+        const elapsedSec = (now - startT) / 1000;
+        const rankIdx = getRankIndexByTime(elapsedSec);
+        if (rankIdx !== currentRankIndex) {
+          currentRankIndex = rankIdx;
+          borderImg = new Image();
+          borderImg.src = rankStages[rankIdx].img;
+          newRankAudio.currentTime = 0;
+          newRankAudio.play();
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      function worldToScreen(wx, wy) { return { sx: (wx - wy) + width / 2, sy: (wx + wy) / 2 + height / 10 }; }
+      function screenToWorld(sx, sy) { const A = sx - width / 2, B = 2 * (sy - height / 10); return { wx: (A + B) / 2, wy: (B - A) / 2 }; }
+
+      document.body.classList.add('menu-active');
+      // Set menu banner on load or when showing menu
+      function setMenuBanner() {
+        let rank = null;
+        try {
+          rank = localStorage.getItem('leagueWarmerLastRank');
+        } catch (e) {}
+        let bannerFile = 'Default_Banner.webp';
+        if (rank) {
+          // Capitalize first letter, rest lowercase, remove spaces if any
+          const cleanRank = rank.charAt(0).toUpperCase() + rank.slice(1).toLowerCase();
+          bannerFile = cleanRank + '_Banner.webp';
+        }
+        const menuBox = document.querySelector('.menu-box');
+        if (menuBox) {
+          menuBox.style.backgroundImage = `url('${bannerFile}')`;
+        }
+      }
+      // Call on load and when menu is shown
+      window.addEventListener('load', setMenuBanner);
+      // Also call when menu is shown after game ends
+      function showMenuScreen() {
+        setMenuBanner();
+        menuScreen.classList.remove('hidden');
+      }
+      // Patch endGame to use showMenuScreen
+      function endGame() {
+        // Play dead.wav sound
+        const deadAudio = new Audio('dead.wav');
+        deadAudio.volume = volume * 0.7;
+        deadAudio.play();
+        // Shake main menu screen for 0.5s
+        triggerMenuShake();
+        document.body.classList.add('menu-active');
+        window.onkeydown = null;
+        window.onkeyup = null;
+        canvas.oncontextmenu = null;
+        // Save highest rank to localStorage for banner
+        const elapsed = (Date.now() - startT) / 1000;
+        const rankIdx = getRankIndexByTime(elapsed);
+        const rankName = rankStages[rankIdx].name;
+        try {
+          localStorage.setItem('leagueWarmerLastRank', rankName);
+        } catch (e) {}
+        const surv = elapsed.toFixed(2);
+        const apm = Math.round(actionCount / (elapsed / 60));
+        menuTitle.textContent = 'Game Over';
+        gameStats.innerHTML = `You survived: ${surv}s<br>APM: ${apm}`;
+        gameStats.classList.remove('hidden');
+        playBtn.textContent = 'Play Again';
+        // Set menu banner
+        setMenuBanner();
+        menuScreen.classList.remove('hidden');
+        timerDiv.style.display = 'none';
+        qDiv.style.display = 'none';
+        eDiv.style.display = 'none';
+        dDiv.style.display = 'none';
+        fDiv.style.display = 'none';
+        qssDiv.style.display = 'none';
+
+        document.querySelector('.top-left-buttons').style.display = 'flex';
+        document.querySelector('.top-right-buttons').style.display = 'flex';
+      }
+
+      // Patch Play button to call setMenuBanner when returning to menu
+      playBtn.onclick = function() {
+        startGame();
+        setMenuBanner();
+      }
+    })();
+  </script>
+</body>
+</html>

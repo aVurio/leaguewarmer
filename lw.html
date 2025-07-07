@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>League Warmer</title>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; cursor: url('Cursor.png'), auto; }
+    #gameCanvas { display: block; }
+    .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      background: rgba(0,0,0,0.7); color: white;
+    }
+    .hidden { display: none; }
+    button { padding: 10px 20px; font-size: 1.2em; margin-top: 10px; cursor: pointer; }
+    .slider, .checkbox { margin-top: 10px; }
+    #timer { position: absolute; top: 10px; right: 10px; font-size: 1.5em; color: #fff; }
+    /* Skill UI */
+    #skill-container-q { position: absolute; bottom: 20px; left: 46%; width: 60px; height: 60px; transform: translateX(-50%); }
+    #skill-container-e { position: absolute; bottom: 20px; left: 53%; width: 60px; height: 60px; transform: translateX(-50%); }
+    #skill-container-d { position: absolute; bottom: 20px; left: 61%; width: 50px; height: 50px; transform: translateX(-50%); }
+    #skill-container-f { position: absolute; bottom: 20px; left: 64%; width: 50px; height: 50px; transform: translateX(-50%); }
+    .skill-img { width: 100%; height: 100%; }
+    .skill-cooldown { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: 1em; color: white; background: rgba(0,0,0,0.5); }
+  </style>
+</head>
+<body>
+  <div id="title-screen" class="screen">
+    <h1>League Warmer</h1>
+    <button id="playBtn">Play</button>
+    <input id="volumeSlider" class="slider" type="range" min="0" max="1" step="0.01" value="1">
+    <label class="checkbox"><input type="checkbox" id="shakeCheckbox" checked> Screen Shake</label>
+    <label class="checkbox"><input type="checkbox" id="swapSkillsCheckbox"> Swap D and F Skills</label>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+  <div id="end-screen" class="screen hidden">
+    <h1>Game Over</h1>
+    <p id="lastTime">You survived: 0.00s</p>
+    <p id="lastTime"> APM: 0</p>
+    <button id="playAgainBtn">Play Again</button>
+    <input id="volumeSliderEnd" class="slider" type="range" min="0" max="1" step="0.01" value="1">
+    <label class="checkbox"><input type="checkbox" id="shakeCheckboxEnd"> Screen Shake</label>
+    <label class="checkbox"><input type="checkbox" id="swapSkillsCheckboxEnd"> Swap D and F Skills</label>
+  </div>
+  <div id="timer" style="display:none;">0.00s | APM: 0</div>
+
+  <!-- Q Skill UI -->
+  <div id="skill-container-q">
+    <img class="skill-img" id="skill-img-q" src="q.webp" alt="Q Skill">
+    <div class="skill-cooldown" id="skill-cooldown-q" class="hidden">1.0</div>
+  </div>
+  <!-- E Skill UI -->
+  <div id="skill-container-e">
+    <img class="skill-img" id="skill-img-e" src="e.webp" alt="E Skill">
+    <div class="skill-cooldown" id="skill-cooldown-e" class="hidden">8.0</div>
+  </div>
+  <!-- D Skill UI -->
+  <div id="skill-container-d">
+    <img class="skill-img" id="skill-img-d" src="Ghost.webp" alt="D Skill">
+    <div class="skill-cooldown" id="skill-cooldown-d" class="hidden">20.0</div>
+  </div>
+  <!-- F Skill UI -->
+  <div id="skill-container-f">
+    <img class="skill-img" id="skill-img-f" src="Flash.webp" alt="F Skill">
+    <div class="skill-cooldown" id="skill-cooldown-f" class="hidden">23.0</div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      let width, height;
+      window.addEventListener('resize', () => { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; });
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+
+      const SPEED_MULT = 0.5;
+      const Q_COOLDOWN = 1000; // 1 second cooldown
+      const E_COOLDOWN = 8000; // 8 seconds cooldown
+      const D_COOLDOWN = 20000; // 20 seconds cooldown
+      const F_COOLDOWN = 23000; // 23 seconds cooldown
+      const CAST_DELAY = 100;  // 100 ms cast freeze
+      const DASH_DURATION = 50; // 50 ms dash
+      const SPEED_BOOST_DURATION = 4000; // 4 seconds
+      const BLINK_GLOW_DURATION = 50; // 50 ms
+
+      // Audio assets
+      const clickAudio   = new Audio('click.ogg');
+      const castAudio    = new Audio('cast.ogg');
+      const destroyAudio = new Audio('destroy.ogg');
+      const speedBoostAudio = new Audio('Ghost.ogg');
+      const blinkAudio = new Audio('Flash.ogg');
+
+      // Background
+      const bgImage = new Image(); bgImage.src = 'background.png';
+
+      // DOM elements
+      const titleScreen = document.getElementById('title-screen');
+      const endScreen   = document.getElementById('end-screen');
+      const playBtn     = document.getElementById('playBtn');
+      const playAgain   = document.getElementById('playAgainBtn');
+      const volIn       = document.getElementById('volumeSlider');
+      const volEnd      = document.getElementById('volumeSliderEnd');
+      const shakeIn     = document.getElementById('shakeCheckbox');
+      const shakeEnd    = document.getElementById('shakeCheckboxEnd');
+      const swapSkillsIn = document.getElementById('swapSkillsCheckbox');
+      const swapSkillsEnd = document.getElementById('swapSkillsCheckboxEnd');
+      const lastTimeP   = document.getElementById('lastTime');
+      const timerDiv    = document.getElementById('timer');
+      const skillImgQ   = document.getElementById('skill-img-q');
+      const skillCdDivQ = document.getElementById('skill-cooldown-q');
+      const skillImgE   = document.getElementById('skill-img-e');
+      const skillCdDivE = document.getElementById('skill-cooldown-e');
+      const skillImgD   = document.getElementById('skill-img-d');
+      const skillCdDivD = document.getElementById('skill-cooldown-d');
+      const skillImgF   = document.getElementById('skill-img-f');
+      const skillCdDivF = document.getElementById('skill-cooldown-f');
+
+      let volume = +volIn.value;
+      let shake  = shakeIn.checked;
+      let skillsSwapped = swapSkillsIn.checked;
+      let nextQAvailable = 0;
+      let nextEAvailable = 0;
+      let nextDAvailable = 0;
+      let nextFAvailable = 0;
+      let lastCast = 0;
+      let isDashing = false;
+      let dashStart = { x: 0, y: 0 };
+      let dashTarget = { x: 0, y: 0 };
+      let dashStartTime = 0;
+      let isSpeedBoostActive = false;
+      let speedBoostEndTime = 0;
+      let isGlowingYellow = false;
+      let glowYellowEndTime = 0;
+      let blinkCopies = [];
+      let actionCount = 0; // Track total actions for APM
+
+      volIn.oninput  = e => volume = +e.target.value;
+      volEnd.oninput = e => { volume = +e.target.value; volIn.value = volume; };
+      shakeIn.onchange  = e => { shake = e.target.checked; shakeEnd.checked = shake; };
+      shakeEnd.onchange = e => { shake = e.target.checked; shakeIn.checked = shake; };
+      swapSkillsIn.onchange  = e => { skillsSwapped = e.target.checked; swapSkillsEnd.checked = skillsSwapped; };
+      swapSkillsEnd.onchange = e => { skillsSwapped = e.target.checked; swapSkillsIn.checked = skillsSwapped; };
+      playBtn.onclick   = startGame;
+      playAgain.onclick = startGame;
+
+      let player, rockets, enemies, bullets, markers, booms, ghosts;
+      let startT, lastRocket, lastEnemy, shakeT, lastGhost;
+      let mouseX = 0, mouseY = 0;
+
+      canvas.onmousemove = e => {
+        const r = canvas.getBoundingClientRect();
+        mouseX = e.clientX - r.left;
+        mouseY = e.clientY - r.top;
+      };
+
+      function startGame() {
+        titleScreen.classList.add('hidden');
+        endScreen.classList.add('hidden');
+        timerDiv.style.display = 'block';
+        nextQAvailable = 0;
+        nextEAvailable = 0;
+        nextDAvailable = 0;
+        nextFAvailable = 0;
+        isDashing = false;
+        isSpeedBoostActive = false;
+        isGlowingYellow = false;
+        blinkCopies = [];
+        actionCount = 0; // Reset actions at the start of the game
+
+        skillsSwapped = swapSkillsIn.checked;
+        swapSkillsEnd.checked = skillsSwapped;
+        skillImgD.src = skillsSwapped ? 'Flash.webp' : 'Ghost.webp';
+        skillImgF.src = skillsSwapped ? 'Ghost.webp' : 'Flash.webp';
+
+        player = { x:0, y:0, destSx:0, destSy:0, moving:false };
+        rockets = []; enemies=[]; bullets=[]; markers=[]; booms=[]; ghosts=[];
+        startT = Date.now(); lastRocket = startT; lastEnemy = startT; shakeT = 0; lastGhost = 0;
+
+        window.onkeydown = onKey;
+        canvas.oncontextmenu = onClick;
+        requestAnimationFrame(loop);
+      }
+
+      function endGame() {
+        window.onkeydown = null; canvas.oncontextmenu = null;
+        const surv = ((Date.now() - startT) / 1000).toFixed(2);
+        lastTimeP.textContent = 'You survived: ' + surv + 's';
+        timerDiv.style.display = 'none'; endScreen.classList.remove('hidden');
+        volEnd.value = volume; shakeEnd.checked = shake; swapSkillsEnd.checked = skillsSwapped;
+      }
+
+      function onKey(e) {
+        if (e.key === 's') player.moving = false;
+        if (e.key.toLowerCase() === 'q') { actionCount++; tryCastQ(); }
+        if (e.key.toLowerCase() === 'e') { actionCount++; tryCastE(); }
+        if (e.key.toLowerCase() === 'd') { actionCount++; tryCastD(); }
+        if (e.key.toLowerCase() === 'f') { actionCount++; tryCastF(); }
+      }
+
+      function tryCastQ() {
+        const now = Date.now();
+        if (now < nextQAvailable) return;
+        player.moving = false;
+        lastCast = now;
+        nextQAvailable = now + Q_COOLDOWN;
+        castAudio.volume = volume;
+        castAudio.play();
+        shoot();
+      }
+
+      function tryCastE() {
+        const now = Date.now();
+        if (now < nextEAvailable || isDashing) return;
+        player.moving = false;
+        const playerScreen = worldToScreen(player.x, player.y);
+        const dxs = mouseX - playerScreen.sx;
+        const dys = mouseY - playerScreen.sy;
+        const dist = Math.hypot(dxs, dys);
+        if (dist > 0) {
+          const dashScreenDistance = 150;
+          const targetSx = playerScreen.sx + (dxs / dist) * dashScreenDistance;
+          const targetSy = playerScreen.sy + (dys / dist) * dashScreenDistance;
+          const targetWorld = screenToWorld(targetSx, targetSy);
+          dashStart = { x: player.x, y: player.y };
+          dashTarget = { x: targetWorld.wx, y: targetWorld.wy };
+          dashStartTime = now;
+          isDashing = true;
+          nextEAvailable = now + E_COOLDOWN;
+        }
+      }
+
+      function tryCastD() {
+        const now = Date.now();
+        if (now < nextDAvailable) return;
+        if (skillsSwapped) {
+          performBlink(now);
+          nextDAvailable = now + F_COOLDOWN;
+        } else {
+          activateSpeedBoost(now);
+          nextDAvailable = now + D_COOLDOWN;
+        }
+      }
+
+      function tryCastF() {
+        const now = Date.now();
+        if (now < nextFAvailable) return;
+        if (skillsSwapped) {
+          activateSpeedBoost(now);
+          nextFAvailable = now + D_COOLDOWN;
+        } else {
+          performBlink(now);
+          nextFAvailable = now + F_COOLDOWN;
+        }
+      }
+
+      function activateSpeedBoost(now) {
+        isSpeedBoostActive = true;
+        speedBoostEndTime = now + SPEED_BOOST_DURATION;
+        speedBoostAudio.volume = volume*0.06;
+        speedBoostAudio.play();
+      }
+
+      function performBlink(now) {
+        const playerScreen = worldToScreen(player.x, player.y);
+        const dxs = mouseX - playerScreen.sx;
+        const dys = mouseY - playerScreen.sy;
+        const dist = Math.hypot(dxs, dys);
+        if (dist > 0) {
+          const blinkScreenDistance = 150 * 1.2;
+          const targetSx = playerScreen.sx + (dxs / dist) * blinkScreenDistance;
+          const targetSy = playerScreen.sy + (dys / dist) * blinkScreenDistance;
+          const targetWorld = screenToWorld(targetSx, targetSy);
+          const startPos = { x: player.x, y: player.y };
+          player.x = targetWorld.wx;
+          player.y = targetWorld.wy;
+          blinkCopies.push({ x: startPos.x, y: startPos.y, t: now });
+          isGlowingYellow = true;
+          glowYellowEndTime = now + BLINK_GLOW_DURATION;
+          blinkAudio.volume = volume*0.07;
+          blinkAudio.play();
+        }
+      }
+
+      function onClick(e) {
+        e.preventDefault();
+        actionCount++; // Increment action counter for right clicks
+        const now = Date.now();
+        if (now - lastCast < CAST_DELAY || isDashing) return;
+        clickAudio.volume = volume;
+        clickAudio.play();
+        const r = canvas.getBoundingClientRect();
+        player.destSx = e.clientX - r.left;
+        player.destSy = e.clientY - r.top;
+        player.moving = true;
+      }
+
+      function shoot() {
+        const size = Math.min(width, height) * 0.05;
+        const speed = size * 0.2 * SPEED_MULT;
+        const ps = worldToScreen(player.x, player.y);
+        const dx = mouseX - ps.sx, dy = mouseY - ps.sy;
+        const d = Math.hypot(dx, dy);
+        if (d > 0) {
+          const stepX = dx / d * speed, stepY = dy / d * speed;
+          const wdx = (stepX + 2 * stepY) / 2;
+          const wdy = (2 * stepY - stepX) / 2;
+          bullets.push({ x: player.x, y: player.y, vx: wdx, vy: wdy, traveled: 0, max: size * 15 });
+        }
+      }
+
+      function spawnRocket() {
+        const ang = Math.random() * 2 * Math.PI;
+        const dist = Math.max(width, height);
+        const wx = player.x + Math.cos(ang) * dist;
+        const wy = player.y + Math.sin(ang) * dist;
+        const dx = player.x - wx, dy = player.y - wy;
+        const d = Math.hypot(dx, dy);
+        const size = Math.min(width, height) * 0.05;
+        const speed = size * 0.1 * SPEED_MULT * 0.75;
+        rockets.push({ x: wx, y: wy, vx: dx / d * speed, vy: dy / d * speed });
+      }
+
+      function spawnEnemy() {
+        const ang = Math.random() * 2 * Math.PI;
+        const dist = Math.max(width, height);
+        enemies.push({ x: player.x + Math.cos(ang) * dist, y: player.y + Math.sin(ang) * dist });
+      }
+
+      function loop() {
+        const now = Date.now(), el = now - startT;
+        const rInt = Math.max(200, 1000 - el / 100);
+        if (now - lastRocket > rInt) { spawnRocket(); lastRocket = now; }
+        if (el > 5000) {
+          const eInt = Math.max(500, 2000 - (el - 5000) / 50);
+          if (now - lastEnemy > eInt) { spawnEnemy(); lastEnemy = now; }
+        }
+
+        const size = Math.min(width, height) * 0.05;
+        const basePSpeed = size * 0.1 * SPEED_MULT;
+        const pSpeed = isSpeedBoostActive ? basePSpeed * 1.2 : basePSpeed;
+        const eSpeed = basePSpeed * 0.75;
+
+        if ((player.moving || isDashing) && now - lastGhost > 10) {
+          ghosts.push({ x: player.x, y: player.y, t: now });
+          lastGhost = now;
+        }
+        ghosts = ghosts.filter(g => now - g.t < 50);
+        blinkCopies = blinkCopies.filter(c => now - c.t < BLINK_GLOW_DURATION);
+
+        if (isSpeedBoostActive && now > speedBoostEndTime) {
+          isSpeedBoostActive = false;
+        }
+        if (isGlowingYellow && now > glowYellowEndTime) {
+          isGlowingYellow = false;
+        }
+
+        if (isDashing) {
+          const elapsed = now - dashStartTime;
+          if (elapsed < DASH_DURATION) {
+            const progress = elapsed / DASH_DURATION;
+            player.x = dashStart.x + (dashTarget.x - dashStart.x) * progress;
+            player.y = dashStart.y + (dashTarget.y - dashStart.y) * progress;
+          } else {
+            player.x = dashTarget.x;
+            player.y = dashTarget.y;
+            isDashing = false;
+          }
+        } else if (player.moving) {
+          const ps = worldToScreen(player.x, player.y);
+          const dxs = player.destSx - ps.sx, dys = player.destSy - ps.sy;
+          const dist = Math.hypot(dxs, dys);
+          if (dist <= pSpeed) {
+            const w = screenToWorld(player.destSx, player.destSy);
+            player.x = w.wx; player.y = w.wy; player.moving = false;
+          } else {
+            const stepX = dxs / dist * pSpeed;
+            const stepY = dys / dist * pSpeed;
+            const wdx = (stepX + 2 * stepY) / 2;
+            const wdy = (2 * stepY - stepX) / 2;
+            player.x += wdx; player.y += wdy;
+          }
+        }
+        rockets.forEach(r => { r.x += r.vx; r.y += r.vy; });
+        enemies.forEach(e => {
+          const dx = player.x - e.x, dy = player.y - e.y, d = Math.hypot(dx, dy);
+          if (d > 0) { e.x += dx / d * eSpeed; e.y += dy / d * eSpeed; }
+        });
+        bullets = bullets.filter(b => {
+          b.x += b.vx; b.y += b.vy; b.traveled += Math.hypot(b.vx, b.vy); return b.traveled < b.max;
+        });
+        markers.forEach(m => m.alpha -= 0.02); markers = markers.filter(m => m.alpha > 0);
+        booms.forEach(b => { b.radius += 1; b.alpha -= 0.02; }); booms = booms.filter(b => b.alpha > 0);
+
+        ctx.save();
+        if (bgImage.complete) {
+          ctx.drawImage(bgImage, 0, 0, width, height);
+        } else {
+          ctx.fillStyle = '#e0e0e0';
+          ctx.fillRect(0, 0, width, height);
+        }
+        ghosts.forEach(g => {
+          const alpha = 1 - (now - g.t) / 50; const gS = worldToScreen(g.x, g.y);
+          ctx.globalAlpha = alpha * 0.3; ctx.fillStyle = 'red'; ctx.fillRect(gS.sx - size / 2, gS.sy - size / 2, size, size);
+        });
+        blinkCopies.forEach(c => {
+          const age = now - c.t;
+          if (age < BLINK_GLOW_DURATION) {
+            const alpha = 1 - age / BLINK_GLOW_DURATION;
+            const cS = worldToScreen(c.x, c.y);
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = 'yellow';
+            ctx.fillRect(cS.sx - size / 2, cS.sy - size / 2, size, size);
+          }
+        });
+        ctx.globalAlpha = 1;
+        const pS = worldToScreen(player.x, player.y);
+        ctx.fillStyle = 'red'; ctx.fillRect(pS.sx - size / 2, pS.sy - size / 2, size, size);
+        if (isSpeedBoostActive) {
+          ctx.fillStyle = 'rgba(0,0,255,0.3)';
+          ctx.fillRect(pS.sx - size, pS.sy - size, size * 2, size * 2);
+        }
+        if (isGlowingYellow) {
+          ctx.fillStyle = 'rgba(255,255,0,0.5)';
+          ctx.fillRect(pS.sx - size, pS.sy - size, size * 2, size * 2);
+        }
+        ctx.fillStyle = 'black'; rockets.forEach(r => { const rS = worldToScreen(r.x, r.y); ctx.beginPath(); ctx.arc(rS.sx, rS.sy, size * 0.25, 0, 2 * Math.PI); ctx.fill(); });
+        ctx.fillStyle = 'green'; enemies.forEach(e => { const eS = worldToScreen(e.x, e.y); ctx.fillRect(eS.sx - size / 2, eS.sy - size / 2, size, size); });
+        ctx.fillStyle = 'orange'; bullets.forEach(b => { const bS = worldToScreen(b.x, b.y); ctx.beginPath(); ctx.arc(bS.sx, bS.sy, size * 0.15, 0, 2 * Math.PI); ctx.fill(); });
+
+        // Draw blue indicator for movement destination
+        if (player.moving) {
+          ctx.fillStyle = 'rgba(0, 0, 255, 0.5)';
+          ctx.beginPath();
+          ctx.arc(player.destSx, player.destSy, 10, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+
+        for (const r of rockets) {
+          const rS = worldToScreen(r.x, r.y);
+          if (Math.hypot(rS.sx - pS.sx, rS.sy - pS.sy) < size * 0.75) return endGame();
+        }
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          const e = enemies[i], eS = worldToScreen(e.x, e.y);
+          if (Math.hypot(eS.sx - pS.sx, eS.sy - pS.sy) < size * 0.75) return endGame();
+          for (let j = 0; j < bullets.length; j++) {
+            const b = bullets[j], bS = worldToScreen(b.x, b.y);
+            if (Math.hypot(bS.sx - eS.sx, bS.sy - eS.sy) < size * 0.75) {
+              destroyAudio.volume = volume * 0.4; destroyAudio.play();
+              booms.push({ x: eS.sx, y: eS.sy, radius: 0, alpha: 1 });
+              if (shake) shakeT = 300;
+              nextQAvailable = Date.now();
+              enemies.splice(i, 1); bullets.splice(j, 1); break;
+            }
+          }
+        }
+        booms.forEach(b => {
+          ctx.globalAlpha = b.alpha; ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, 2 * Math.PI); ctx.strokeStyle = 'yellow'; ctx.lineWidth = 2; ctx.stroke();
+        }); ctx.globalAlpha = 1;
+        ctx.restore();
+
+        const elapsed = (now - startT) / 1000; // in seconds
+        const apm = elapsed > 0 ? Math.round(actionCount / (elapsed / 60)) : 0;
+        timerDiv.textContent = elapsed.toFixed(2) + 's | APM: ' + apm;
+
+        if (now < nextQAvailable) {
+          const rem = ((nextQAvailable - now) / 1000).toFixed(1);
+          skillImgQ.style.filter = 'grayscale(100%)';
+          skillCdDivQ.textContent = rem;
+          skillCdDivQ.classList.remove('hidden');
+        } else {
+          skillImgQ.style.filter = '';
+          skillCdDivQ.classList.add('hidden');
+        }
+        if (now < nextEAvailable) {
+          const rem = ((nextEAvailable - now) / 1000).toFixed(1);
+          skillImgE.style.filter = 'grayscale(100%)';
+          skillCdDivE.textContent = rem;
+          skillCdDivE.classList.remove('hidden');
+        } else {
+          skillImgE.style.filter = '';
+          skillCdDivE.classList.add('hidden');
+        }
+        if (now < nextDAvailable) {
+          const rem = ((nextDAvailable - now) / 1000).toFixed(1);
+          skillImgD.style.filter = 'grayscale(100%)';
+          skillCdDivD.textContent = rem;
+          skillCdDivD.classList.remove('hidden');
+        } else {
+          skillImgD.style.filter = '';
+          skillCdDivD.classList.add('hidden');
+        }
+        if (now < nextFAvailable) {
+          const rem = ((nextFAvailable - now) / 1000).toFixed(1);
+          skillImgF.style.filter = 'grayscale(100%)';
+          skillCdDivF.textContent = rem;
+          skillCdDivF.classList.remove('hidden');
+        } else {
+          skillImgF.style.filter = '';
+          skillCdDivF.classList.add('hidden');
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      function worldToScreen(wx, wy) { return { sx: (wx - wy) + width / 2, sy: (wx + wy) / 2 + height / 10 }; }
+      function screenToWorld(sx, sy) { const A = sx - width / 2, B = 2 * (sy - height / 10); return { wx: (A + B) / 2, wy: (B - A) / 2 }; }
+    })();
+  </script>
+</body>
+</html>

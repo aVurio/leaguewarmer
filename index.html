@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>League Warmer</title>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; cursor: url('cursor.png'), auto; }
+    #gameCanvas { display: block; }
+    .screen { 
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      background: url('menu-background.png') no-repeat center center fixed;
+      background-size: cover;
+      color: white;
+    }
+    .hidden { display: none !important; }
+    button { padding: 10px 20px; font-size: 1.2em; margin-top: 10px; cursor: url('cursor_select.png'), auto; }
+    .slider{ margin-top: 0px; margin-bottom: 15px; }
+    .checkbox { margin-top: 5px; cursor: url('cursor_select.png'), auto;}
+    #timer { position: absolute; top: 10px; right: 10px; font-size: 1.5em; color: #fff; }
+    #skill-container-q { position: absolute; bottom: 20px; left: 46%; width: 60px; height: 60px; transform: translateX(-50%); }
+    #skill-container-e { position: absolute; bottom: 20px; left: 53%; width: 60px; height: 60px; transform: translateX(-50%); }
+    #skill-container-d { position: absolute; bottom: 20px; left: 61%; width: 50px; height: 50px; transform: translateX(-50%); }
+    #skill-container-f { position: absolute; bottom: 20px; left: 64%; width: 50px; height: 50px; transform: translateX(-50%); }
+    #skill-container-qss { position: absolute; bottom: 20px; left: 67%; width: 50px; height: 50px; transform: translateX(-50%); }
+    .skill-img { width: 100%; height: 100%; }
+    .skill-cooldown { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: 1em; color: white; background: rgba(0,0,0,0.5); }
+    .bfp { width: 240px; margin-bottom: -50px; }
+    .top-left-buttons, .top-right-buttons {
+      position: absolute;
+      z-index: 1000;
+      gap: 15px;
+    }
+    .icon-button { width: 40px; height: 40px; background: none; border: none; background-size: cover; background-position: center; cursor: url('cursor_select.png'), auto; }
+    .top-right-buttons {
+      top: 10px;
+      right: 20px;
+      display: none;
+    }
+    .top-left-buttons {
+      top: 10px;
+      left: 20px;
+      display: none;
+    }
+    .ingame-gui{
+      background:rgba(32, 32, 32)
+    }
+    body.menu-active .top-left-buttons,
+    body.menu-active .top-right-buttons {
+      display: flex;
+    }
+    #setQssKeyBtn, #qssKeyDisplay { display: none; margin-left: 10px; }
+    .menu-box { background-color: rgba(50, 50, 50, 0.8); padding: 20px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; }
+    .popup { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+    .popup-content { background-color: rgba(50, 50, 50, 100); padding-bottom:30px; padding-top: 0px; border-radius: 10px; width: 60%; max-width: 400px; position: relative; color: white; }
+    .close-btn { position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; background: url('close.png') no-repeat center center; background-size: contain; border: none; cursor: url('cursor_select.png'), auto; }
+    /* Shake animation for menu screen */
+    @keyframes shake {
+      0% { transform: translate(0px, 0px); }
+      10% { transform: translate(-10px, 2px); }
+      20% { transform: translate(8px, -2px); }
+      30% { transform: translate(-8px, 4px); }
+      40% { transform: translate(8px, -4px); }
+      50% { transform: translate(-6px, 2px); }
+      60% { transform: translate(6px, -2px); }
+      70% { transform: translate(-4px, 2px); }
+      80% { transform: translate(4px, -2px); }
+      90% { transform: translate(-2px, 1px); }
+      100% { transform: translate(0px, 0px); }
+    }
+    .shake {
+      animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+    }
+  </style>
+</head>
+<body>
+  <div id="version" style="position: absolute; bottom: 10px; left: 10px; color: white; font-size: 1.3em;">v1.0.0</div>
+  <div class="top-left-buttons">
+    <button class="icon-button" id="openMenu1" style="background-image: url('settings.png');"></button>
+    <button class="icon-button" id="openMenu2" style="background-image: url('help.png');"></button>
+  </div>
+  <div class="top-right-buttons">
+    <button class="icon-button" id="fullscreenBtn" style="background-image: url('fullscreen.png');"></button>
+  </div>
+  <div id="menu-screen" class="screen">
+    <div class="menu-box">
+      <div><img src="bfp.png" class="bfp"></div>
+      <h1 id="menu-title">League Warmer</h1>
+      <button id="rankedBtn">Ranked</button><br>
+      <button id="freeplayBtn">Freeplay</button><br>
+      <br><p>v1.0.0</p>
+    </div>
+  </div>
+  <div id="settings-popup" class="popup hidden">
+    <div class="popup-content">
+      <button class="close-btn" id="closeSettings"></button>
+      <center><h2>Settings</h2>
+      <p>Volume: </p>
+      <input id="volumeSlider" class="slider" type="range" min="0" max="1" step="0.01" value="1"><br>
+      <label class="checkbox"><input type="checkbox" id="swapSkillsCheckbox"> Swap D and F Skills</label>
+    </center></div>
+  </div>
+  <div id="help-popup" class="popup hidden">
+    <div class="popup-content">
+      <button class="close-btn" id="closeHelp"></button>
+      <center><h2>Help</h2>
+      <p>W tej grze napierdalasz bez opamiętania i unikasz pocisków jakbyś tańczył z samą śmiercią.
+        Każda sekunda to jazda bez trzymanki — setki przeciwników, tysiące kul lecących w Twoją stronę, a Ty w środku tego piekła, jak jebany Neo z Matriksa, tylko z większym arsenałem.
+        Nie ma czasu na myślenie. Dasz, unik, headshot, eksplozja. Kolejny dasz, salwa rakiet, boss większy niż budynek, a Ty dalej stoisz i siejesz rozpierdol.
+        To nie gra, to test nerwów, refleksu i czystej furii.
+        Jak nie jesteś gotów – spierdalaj. Tu grają tylko ci, co się nie boją patrzeć śmierci w oczy… i ją wysadzać.</p>
+      </center></div>
+  </div>
+  <script>
+    document.getElementById('rankedBtn').onclick = function() {
+      window.location.href = 'ranked.html';
+    };
+    document.getElementById('freeplayBtn').onclick = function() {
+      window.location.href = 'leaguewarmer.html';
+    };
+  </script>
+</body>
+</html>
